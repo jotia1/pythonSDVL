@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 import seaborn as sns
+import time as timer
 import matplotlib.pyplot as plt
 sns.set()
 
@@ -8,6 +9,7 @@ MSPERSEC = 1000
 PTABLEDELAYINDEXOFFSET = 1
 PTABLEVARIANCEINDEXOFFSET = 10
 DELAYMIN = 1
+TIMEEXECUTION = False
 
 
 class Network(object):
@@ -51,7 +53,7 @@ class Network(object):
 def main():
     logger = setup_logging(f"{__name__}.main")
 
-    sim_time_sec = 1
+    sim_time_sec = 2
     sim_time_ms = sim_time_sec * MSPERSEC
     net = Network()
     
@@ -70,6 +72,7 @@ def main():
 
     spike_time_trace = np.empty((0, 2))
     last_spike_time = np.zeros((net.N, 1)) * -np.Inf
+    big_stt = []  # For sake of time comparison to matlab implementation
 
     # Get a table of gaussians
     variance_precision = 0.01
@@ -83,10 +86,12 @@ def main():
     fn_trace = []
     fired_trace = []
 
+    start_time = timer.time()
+    sim_timer = SimulationTimer(TIMEEXECUTION)
     for time in range(sim_time_ms):
         #logger.debug(f'Timestep: {time} ms')
 
-
+        sim_timer.log_time(time)
 
         Iapp = upcoming_current[:, upcur_idx]
         iapp_trace.append(Iapp[net.N-1])
@@ -105,6 +110,8 @@ def main():
 
         fn_trace.extend(fired_naturally.tolist())
         fired_trace.extend(zip(fired.tolist(), [time for x in range(fired.size)]))
+
+        sim_timer.log_time(time)
 
         # Get all possible post-synaptic connections
         fired_delays = np.round(net.delays[fired, :])
@@ -129,7 +136,9 @@ def main():
         stepped_current = np.zeros(p_values.shape)
         if conn_w.size > 0:
             stepped_current = conn_w.reshape((conn_w.size, 1)) * p_values
-
+        
+        sim_timer.log_time(time) 
+        
         # TODO This is a hack for a single neuron.
         # For arbitrary second layers will need to be more careful about how we sum...
         output_currents = np.sum(stepped_current, axis=0)
@@ -138,6 +147,7 @@ def main():
         weighted_gauss_samples = np.zeros((net.N, current_steps))
         weighted_gauss_samples[-1, :] = output_currents
         
+        sim_timer.log_time(time) 
 
         # Figure out what the upcoming currents are
         upcoming_current[:, upcur_idx] = 0
@@ -149,32 +159,44 @@ def main():
         # Reset any neurons that have fired
         v[fired] = net.v_reset
 
+        sim_timer.log_time(time) 
+
         ###     LEARNING
 
         ##      STDP
         # TODO : whenever it seems relevent... 
 
         # Bound weights
-        net.w = np.maximum(0, np.minimum(net.w_max, net.w))
+        #net.w = np.maximum(0, np.minimum(net.w_max, net.w))
 
+        sim_timer.log_time(time) 
         ##      SDVL
         # Do not adjust synapses during testing
         if time < ((sim_time_sec - net.test_seconds) * MSPERSEC):
+
+            sim_timer.log_time(time)
+
             t0 = np.broadcast_to(time - last_spike_time, (net.N, fired.size))
             t0_negu = t0 - net.delays[:, fired]
             abs_t0_negu = np.abs(t0_negu)
             k = np.power(net.variance[:, fired], 2) 
             shifts = np.sign(t0_negu) * k * net.nu
 
+            sim_timer.log_time(time)
+
             # Update SDVL means
             du = np.zeros(t0_negu.shape)
             du[t0 >= net.a2] = -k[t0 >= net.a2] * net.nu
             du[abs_t0_negu >= net.a1] = shifts[abs_t0_negu >= net.a1]
 
+            sim_timer.log_time(time) 
+
             net.delays[:, fired] += du
             net.delays[net.connections] = np.maximum(DELAYMIN, 
                                         np.minimum(net.delay_max, 
                                         net.delays[net.connections]))
+            
+            sim_timer.log_time(time) 
 
             # Update SDVL variance
             dvar = np.zeros(t0_negu.shape)
@@ -189,11 +211,66 @@ def main():
             # TODO : investigate the variance net.connections. Could it be used above when 
             # trying calculate the upcoming_currents
 
+        sim_timer.log_time(time)
 
+        if time % MSPERSEC == 0:
+            big_stt.append(spike_time_trace)
+            spike_time_trace = np.empty((0, 2))
+
+        sim_timer.log_time(time)
     
-    standard_plots(spike_time_trace, iapp_trace, vt)
+    print('Time taken: ', timer.time() - start_time)
+    #print(sim_timer.get_percentages())
+    #standard_plots(spike_time_trace, iapp_trace, vt)
     logger.info('Simulation finished')
     
+
+class SimulationTimer():
+
+    times = {}
+
+    def __init__(self, time_execution=False):
+        """ Create a SimulationTimer
+
+        Optionally can choose to time a simulation or not, this logging
+        to stay in the code without having using memory / time for logging.
+
+        time_execution (bool) : Whether or not to time this execution of the program or not
+        """
+        self.time_execution = time_execution  
+
+    def log_time(self, time):
+        """ Helper function for timing execution
+
+        Pass in the current millisecond and it will be recorded in the global
+
+        time (int) : The current ms of the simulation
+        """ 
+        if not self.time_execution:
+            return
+
+        time_records = self.times.get(time, [])
+        time_records.append(timer.time())
+        self.times[time] = time_records
+
+    def get_times(self):
+        """ Return the times recorded
+
+        Each col is ordered based on the order of calls to log_time with a specific time
+        The rows are NOT in order of time
+        """
+        return np.array(list(self.times.values()))
+
+    def get_percentages(self):
+        if not self.time_execution:
+            return np.array([])
+        data = self.get_times()
+        sums = np.sum(data, axis=0)
+        section_times = sums[1:] - sums[:-1] 
+        return np.round(section_times / np.sum(section_times) * 100) 
+
+    def reset(self):
+        self.times = {}
 
 def standard_plots(spike_time_trace, iapp_trace, vt):
     ax = plt.subplot(211)
