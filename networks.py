@@ -2,8 +2,8 @@ import numpy as np
 from abc import ABC, abstractmethod 
 
 class Network(object):
-    def __init__(self):
-        self.group_sizes = np.array([2000, 1])
+    def __init__(self, n_inputs=2000):
+        self.group_sizes = np.array([n_inputs, 1])
         self.N_inp = self.group_sizes[0]
         self.N = np.sum(self.group_sizes)
         
@@ -26,7 +26,6 @@ class Network(object):
         self.variance_min = 0.1
         self.variance_max = 10
         self.delay_max = 20
-        self.voltages_to_save = np.array([self.N-1])
 
         self.test_seconds = 0
 
@@ -34,5 +33,5 @@ class Network(object):
         self.a2 = 20
         self.b1 = 20
         self.b2 = 20
-        self.nu = 0.04
+        self.nu = 0.16
         self.nv = 0.04

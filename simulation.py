@@ -6,25 +6,27 @@ MSPERSEC = 1000
 PTABLEDELAYINDEXOFFSET = 1
 PTABLEVARIANCEINDEXOFFSET = 10
 DELAYMIN = 1
-TIMEEXECUTION = True
 
 def simulate(net, sim_params):
     logger = st.setup_logging(f"{__name__}.simulate")
+    out = SimulationOuput()
 
     sim_time_sec = sim_params.sim_time_sec
     sim_time_ms = sim_time_sec * MSPERSEC
     
-    inp_idxs = np.random.randint(0, net.N-1, net.N * 10 * sim_time_sec)
-    inp_ts = np.random.randint(0, sim_time_sec * MSPERSEC, net.N * 10 * sim_time_sec)
+    #inp_idxs = np.random.randint(0, net.N-1, net.N * 10 * sim_time_sec)
+    #inp_ts = np.random.randint(0, sim_time_sec * MSPERSEC, net.N * 10 * sim_time_sec)
 
     current_steps = 40
     upcoming_current = np.zeros([net.N, current_steps])
     upcur_idx = 0
 
     v = np.ones(net.N) * net.v_rest
-    vt = np.zeros([len(net.voltages_to_save), sim_time_ms])
+    out.vt = np.zeros([len(sim_params.variances_to_save), sim_time_ms])
+    out.delayst = np.zeros((net.N, len(sim_params.delays_to_save), sim_time_ms))
+    out.variancest = np.zeros((net.N, len(sim_params.variances_to_save), sim_time_ms))
 
-    spike_time_trace = np.empty((0, 2))
+    out.spike_time_trace = np.empty((0, 2))
     last_spike_time = np.zeros((net.N, 1)) * -np.Inf
     big_stt = []  # For sake of time comparison to matlab implementation
 
@@ -32,40 +34,44 @@ def simulate(net, sim_params):
     variance_precision = 0.01
     var_range = np.concatenate((np.arange(net.variance_min, net.variance_max, variance_precision), [10]))
     ptable = getlookuptable(var_range,
-                            np.arange(0, net.delay_max),
+                            np.arange(1, net.delay_max+1),
                             np.arange(0, current_steps),
                             net.fgi)
 
-    iapp_trace = []
-    fn_trace = []
-    fired_trace = []
+    out.iapp_trace = []
+    out.fn_trace = []
+    out.fired_trace = []
 
     start_time = timer.time()
-    sim_timer = st.SimulationTimer(TIMEEXECUTION)
+    out.sim_timer = st.SimulationTimer(sim_params.time_execution)
     for time in range(sim_time_ms):
         #logger.debug(f'Timestep: {time} ms')
 
-        sim_timer.log_time(time)
+        out.sim_timer.log_time(time)
 
         Iapp = upcoming_current[:, upcur_idx]
-        iapp_trace.append(Iapp[net.N-1])
+        out.iapp_trace.append(Iapp[net.N-1])
 
         # Update membrane equations
         v += ((net.v_rest - v) / net.neuron_tau) + Iapp
-        vt[:, time] = v[net.voltages_to_save]
+
+        out.vt[:, time] = v[sim_params.voltages_to_save]
+        out.delayst[:, :, time] = net.delays[:, sim_params.delays_to_save]
+        out.variancest[:, :, time] = net.variance[:, sim_params.variances_to_save]
 
         fired_naturally = np.where(v > net.v_threshold)[0]
-        fired_inputs = inp_idxs[inp_ts == time]
+        #fired_inputs = inp_idxs[inp_ts == time]
+        fired_inputs = sim_params.get_fired_inputs(time)
         fired = np.concatenate((fired_naturally, fired_inputs))
         fired_spike_times = np.concatenate((time * np.ones(fired.shape).reshape((-1, 1)), fired.reshape((-1, 1))), axis=1)
-        spike_time_trace = np.concatenate((spike_time_trace, 
+        out.spike_time_trace = np.concatenate((out.spike_time_trace, 
                 fired_spike_times), axis=0)
         last_spike_time[fired] = time
 
-        fn_trace.extend(fired_naturally.tolist())
-        fired_trace.extend(zip(fired.tolist(), [time for x in range(fired.size)]))
+        out.fn_trace.extend(fired_naturally.tolist())
+        out.fired_trace.extend(zip(fired.tolist(), [time for x in range(fired.size)]))
 
-        sim_timer.log_time(time)                                # 10 
+        out.sim_timer.log_time(time)                                # 10 
 
         # Get all possible post-synaptic connections
         fired_delays = np.round(net.delays[fired, :])
@@ -91,7 +97,7 @@ def simulate(net, sim_params):
         if conn_w.size > 0:
             stepped_current = conn_w.reshape((conn_w.size, 1)) * p_values
         
-        sim_timer.log_time(time)                                # 10 
+        out.sim_timer.log_time(time)                                # 10 
         
         # TODO This is a hack for a single neuron.
         # For arbitrary second layers will need to be more careful about how we sum...
@@ -101,7 +107,7 @@ def simulate(net, sim_params):
         weighted_gauss_samples = np.zeros((net.N, current_steps))
         weighted_gauss_samples[-1, :] = output_currents
         
-        sim_timer.log_time(time) 
+        out.sim_timer.log_time(time) 
 
         # Figure out what the upcoming currents are
         upcoming_current[:, upcur_idx] = 0
@@ -113,7 +119,7 @@ def simulate(net, sim_params):
         # Reset any neurons that have fired
         v[fired] = net.v_reset
 
-        sim_timer.log_time(time) 
+        out.sim_timer.log_time(time) 
 
         ###     LEARNING
 
@@ -123,12 +129,12 @@ def simulate(net, sim_params):
         # Bound weights
         #net.w = np.maximum(0, np.minimum(net.w_max, net.w))
 
-        sim_timer.log_time(time) 
+        out.sim_timer.log_time(time) 
         ##      SDVL
         # Do not adjust synapses during testing
         if time < ((sim_time_sec - net.test_seconds) * MSPERSEC):
 
-            sim_timer.log_time(time)
+            out.sim_timer.log_time(time)
 
             t0 = np.broadcast_to(time - last_spike_time, (net.N, fired.size))
             t0_negu = t0 - net.delays[:, fired]
@@ -136,21 +142,21 @@ def simulate(net, sim_params):
             k = np.power(net.variance[:, fired], 2) 
             shifts = np.sign(t0_negu) * k * net.nu
 
-            sim_timer.log_time(time)                        # 25 %
+            out.sim_timer.log_time(time)                        # 25 %
 
             # Update SDVL means
             du = np.zeros(t0_negu.shape)
             du[t0 >= net.a2] = -k[t0 >= net.a2] * net.nu
             du[abs_t0_negu >= net.a1] = shifts[abs_t0_negu >= net.a1]
 
-            sim_timer.log_time(time)                        # 9%
+            out.sim_timer.log_time(time)                        # 9%
 
             net.delays[:, fired] += du
             net.delays[net.connections] = np.maximum(DELAYMIN, 
                                         np.minimum(net.delay_max, 
                                         net.delays[net.connections]))
             
-            sim_timer.log_time(time)                        # 17 %
+            out.sim_timer.log_time(time)                        # 17 %
 
             # Update SDVL variance
             dvar = np.zeros(t0_negu.shape)
@@ -165,27 +171,44 @@ def simulate(net, sim_params):
             # TODO : investigate the variance net.connections. Could it be used above when 
             # trying calculate the upcoming_currents
 
-        sim_timer.log_time(time)                           # 25 %
+        out.sim_timer.log_time(time)                           # 25 %
 
         #if time % MSPERSEC == 0:
         #    big_stt.append(spike_time_trace)
         #    spike_time_trace = np.empty((0, 2))
 
-        sim_timer.log_time(time)
+        out.sim_timer.log_time(time)
+
+    
+        if time > 0 and time % 10000 == 0:
+            logger.info(f'{time // 1000} seconds, {(timer.time() - start_time) / (time // 1000)} s/ss')
     
     print('Time taken: ', timer.time() - start_time)
     logger.info('Simulation finished')
 
-    #  HACK : remove
-    net.vt = vt
-    net.iapp_trace = iapp_trace
-    net.spike_time_trace = spike_time_trace
-
-    return net, sim_timer
+    return out
 
 class SimulationParameters():
     def __init__(self):
         self.sim_time_sec = 2
+        self.time_execution = False
+        self.inp_idxs = np.array([])
+        self.inp_ts = np.array([])
+
+        self.voltages_to_save = np.array([])
+        self.delays_to_save = np.array([])
+        self.variances_to_save = np.array([])
+
+    def get_fired_inputs(self, time):
+        return self.inp_idxs[self.inp_ts == time]
+
+
+class SimulationOuput():
+    def __init__(self):
+        self.sim_timer = None
+        self.vt = None
+        self.iapp_trace = None
+        self.spike_time_trace = None
 
 def getlookuptable(var_range, delays_range, steps_range, fgi):
     """ Table for postsynaptic currents for given delay and variance
@@ -195,7 +218,7 @@ def getlookuptable(var_range, delays_range, steps_range, fgi):
     time step for the given delay and variance.
     """
     logger = st.setup_logging(f'{__name__}.getlookuptable')
-    accuracy = 0.001
+    accuracy = 0.01
     ptable_filename = f"ptables/ptable_{str(fgi).replace('.', '')}_{str(accuracy).replace('.', '')}.npy"
     
     try:
@@ -221,6 +244,7 @@ def getlookuptable(var_range, delays_range, steps_range, fgi):
     adjustment_term = fgi * accuracy * 0.05
     small_peaks = 0
     big_peaks = 0
+    oom = 0
     do = True
     while do:
         p += adjustment_term * small_peaks
@@ -233,7 +257,11 @@ def getlookuptable(var_range, delays_range, steps_range, fgi):
 
         small_peaks = full_integral < (fgi - max_error)
         big_peaks = full_integral > (fgi + max_error)
-        do = np.any(small_peaks) or np.any(big_peaks)
+        cur_oom = np.sum(small_peaks) + np.sum(big_peaks)
+        if len(str(cur_oom)) != len(str(oom)):
+            print(f'Errors left: {cur_oom}')
+            oom = cur_oom
+        do = cur_oom > 0
     
     ptable = np.repeat(np.reshape(p, (var_range.size, delays_range.size, 1)), 40, 2) * exptable
 
