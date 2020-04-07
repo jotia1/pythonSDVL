@@ -3,8 +3,6 @@ import logging
 import time as timer
 
 class SimulationTimer():
-    
-    times = {}
 
     def __init__(self, time_execution=False):
         """ Create a SimulationTimer
@@ -14,6 +12,7 @@ class SimulationTimer():
 
         time_execution (bool) : Whether or not to time this execution of the program or not
         """
+        self.times = {}
         self.time_execution = time_execution  
 
     def log_time(self, time):

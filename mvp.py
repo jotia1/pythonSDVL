@@ -4,12 +4,37 @@ from simulation import *
 from networks import *
 
 def main():
+    pass
+
+def run_default(i=0):
+    print(f'running {i}')
     net = Network()
     sim_params = SimulationParameters()
-    #out, sim_timer = simulate(net, sim_params)
+    sim_params.sim_time_sec = 1
+    sim_params.time_execution = True
+    sim_params.inp_idxs = np.random.randint(0, net.N-1, net.N * 10 * sim_params.sim_time_sec)
+    sim_params.inp_ts = np.random.randint(0, sim_params.sim_time_sec * MSPERSEC, net.N * 10 * sim_params.sim_time_sec)
+    sim_params.voltages_to_save = np.array(net.N-1, dtype=np.int32)
+    sim_params.delays_to_save = np.array([], dtype=np.int32)
+    sim_params.variances_to_save = np.array([], dtype=np.int32)
+
+    out = simulate(net, sim_params)
+    out.i = i
+    print(out.sim_timer.get_percentages())
+
+    return out
 
     #print(sim_timer.get_percentages())
     #standard_plots(out.spike_time_trace, out.iapp_trace, out.vt)
+
+
+def run_parallel():
+    from multiprocessing import Pool, Process
+
+    with Pool(processes=2) as pool:
+        results = pool.map(run_default, (2, 5))
+
+        print(results)
 
 
 
@@ -17,9 +42,11 @@ def plot_simple_sdvl_example():
     net = Network(n_inputs=3)
     net.fgi = 8
     net.a1 = 1
-    net.a2 = 1
+    net.a2 = 2
     net.b1 = 3
     net.b2 = 3
+    net.nu = 0.12
+    net.nv = 0.04
 
     sim_params = SimulationParameters()
     sim_params.sim_time_sec = 30
@@ -93,4 +120,5 @@ def plot_simple_sdvl_example():
 
 if __name__ == '__main__':
     #main()
-    plot_simple_sdvl_example()
+    #plot_simple_sdvl_example()
+    run_parallel()
