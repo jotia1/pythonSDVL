@@ -1,6 +1,7 @@
 import json
 import subprocess
 import math
+import numpy as np
 
 def make_sbatch_header(sbatch_params):
     header = ['#!/bin/bash\n']
@@ -33,26 +34,30 @@ def exp_values_from_index(exp_params, index):
     step_size = exp_params.get('var_step')
 
     var_range = int(round((end - start) / step_size))
-    value = index % var_range
-    repeat = index // var_range
+    value_idx = (index - 1) % var_range # Array index start at 1, make 0 indexed
+    repeat = (index - 1) // var_range
+
+    # Python float inaccuracies make this problematic
+    # TODO : Consider fixing this issue
+    value = round(value_idx * step_size + start, 4)
     
     return value, repeat
 
 def run_test_cluster():
     exp_params = {
-        'variable'  :   'test',
-        'var_min'   :   0,
-        'var_max'   :   4,
+        'variable'  :   'frq',
+        'var_min'   :   1,
+        'var_max'   :   3,
         'var_step'  :   1,
-        'repeats'   :   1,
-        'job_name'  :   'test_job'
+        'repeats'   :   3,
+        'job_name'  :   'fgi_test'
     }
 
     tmp_exp_filename = 'tmp_exp_params_file.json'
     write_exp_param_file(tmp_exp_filename, exp_params)
 
     ntasks = calc_ntasks(exp_params)
-    running_tasks_max = 2
+    running_tasks_max = 3
     job_name = exp_params.get('job_name')
 
     sbatch_params = {
@@ -66,9 +71,16 @@ def run_test_cluster():
     ## Build and write sbatch script
     script = make_sbatch_header(sbatch_params)
     script += '\n' * 2
-    script += '\n'.join([f'mv {tmp_exp_filename} exp_params_$SLURM_JOB_ID.json',
-            'echo \"My SLURM_ARRAY_TASK_ID: \" $SLURM_ARRAY_TASK_ID',
-            'srun python3 python_wait.py exp_params_$SLURM_JOB_ID.json $SLURM_ARRAY_TASK_ID'])
+    script += '\n'.join(['if [[ $SLURM_ARRAY_TASK_ID -eq 1 ]]; then',
+            #'    echo \"mv file now\"',
+            f'    mv {tmp_exp_filename} exp_params_$SLURM_ARRAY_JOB_ID.json',
+            'fi',
+            'if [ ! -e exp_params_$SLURM_ARRAY_JOB_ID.json ]; then',
+            #'    echo \"Sleep now\"',
+            '    sleep 5',
+            'fi',
+            #'echo \"My SLURM_ARRAY_TASK_ID: \" $SLURM_ARRAY_TASK_ID',
+            'srun python3 runexperiment.py exp_params_$SLURM_ARRAY_JOB_ID.json $SLURM_ARRAY_TASK_ID'])
 
     sbatch_filename = f'{job_name}.sbatch'
     with open(sbatch_filename, "w") as f:
