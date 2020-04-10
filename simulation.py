@@ -1,8 +1,9 @@
 import numpy as np
 import time as timer
 import simtools as st
+from simtools import MSPERSEC
+from datasource import *
 
-MSPERSEC = 1000
 PTABLEDELAYINDEXOFFSET = 1
 PTABLEVARIANCEINDEXOFFSET = 10
 DELAYMIN = 1
@@ -22,11 +23,11 @@ def simulate(net, sim_params):
     upcur_idx = 0
 
     v = np.ones(net.N) * net.v_rest
-    out.vt = np.zeros([len(sim_params.variances_to_save), sim_time_ms])
+    out.vt = np.zeros((len(sim_params.voltages_to_save), sim_time_ms))
     out.delayst = np.zeros((net.N, len(sim_params.delays_to_save), sim_time_ms))
     out.variancest = np.zeros((net.N, len(sim_params.variances_to_save), sim_time_ms))
 
-    out.spike_time_trace = np.empty((0, 2))
+    out.spike_time_trace = []
     last_spike_time = np.zeros((net.N, 1)) * -np.Inf
     big_stt = []  # For sake of time comparison to matlab implementation
 
@@ -41,6 +42,7 @@ def simulate(net, sim_params):
     out.iapp_trace = []
     out.fn_trace = []
     out.fired_trace = []
+    out.offsets = []
 
     start_time = timer.time()
     out.sim_timer = st.SimulationTimer(sim_params.time_execution)
@@ -61,11 +63,16 @@ def simulate(net, sim_params):
 
         fired_naturally = np.where(v > net.v_threshold)[0]
         #fired_inputs = inp_idxs[inp_ts == time]
-        fired_inputs = sim_params.get_fired_inputs(time)
+
+        cur_ms = time % MSPERSEC
+        if cur_ms == 0: # Generate next second worth of data
+            sim_params.inp_idxs, sim_params.inp_ts, offsets = sim_params.data_fcn()
+            out.offsets.append(np.array(offsets) + time)
+        fired_inputs = sim_params.inp_idxs[sim_params.inp_ts == cur_ms]
+
         fired = np.concatenate((fired_naturally, fired_inputs))
         fired_spike_times = np.concatenate((time * np.ones(fired.shape).reshape((-1, 1)), fired.reshape((-1, 1))), axis=1)
-        out.spike_time_trace = np.concatenate((out.spike_time_trace, 
-                fired_spike_times), axis=0)
+        out.spike_time_trace.append(fired_spike_times)
         last_spike_time[fired] = time
 
         out.fn_trace.extend(fired_naturally.tolist())
@@ -182,25 +189,43 @@ def simulate(net, sim_params):
     
         if time > 0 and time % 10000 == 0:
             logger.info(f'{time // 1000} seconds, {(timer.time() - start_time) / (time // 1000)} s/ss')
-    
+
+    # Combine lists of arrays into a single array
+    out.spike_time_trace = np.concatenate(out.spike_time_trace)
+    out.offsets = np.concatenate(out.offsets)
+
     print('Time taken: ', timer.time() - start_time)
     logger.info('Simulation finished')
 
     return out
 
 class SimulationParameters():
-    def __init__(self):
+    def __init__(self, inp_idxs=None, inp_ts=None):
         self.sim_time_sec = 2
         self.time_execution = False
-        self.inp_idxs = np.array([])
-        self.inp_ts = np.array([])
+        self.inp_idxs = inp_idxs
+        self.inp_ts = inp_ts
+        self.input_provided = True
+        if not inp_idxs or not inp_ts:
+            print('Input data not provided or incomplete, generating every second')
+            self.generate_input = False
+
+        self.Tp = 50
 
         self.voltages_to_save = np.array([])
         self.delays_to_save = np.array([])
         self.variances_to_save = np.array([])
 
-    def get_fired_inputs(self, time):
-        return self.inp_idxs[self.inp_ts == time]
+    # def get_fired_inputs(self, time):
+    #     cur_ms = time
+    #     if not self.input_provided:
+    #         cur_ms = time % MSPERSEC
+    #         if cur_ms == 0: # Generate next second worth of dat
+    #             self.inp_idxs, self.inp_ts = self.generate_input()
+    #     return self.inp_idxs[self.inp_ts == cur_ms]
+
+    # def generate_input(self):
+    #     return embedded_pattern(50, 10, 2000, 500, 5, p_inp, p_ts, None, 0.0)
 
 
 class SimulationOuput():

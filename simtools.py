@@ -2,6 +2,8 @@ import numpy as np
 import logging
 import time as timer
 
+MSPERSEC = 1000
+
 class SimulationTimer():
 
     def __init__(self, time_execution=False):

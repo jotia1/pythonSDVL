@@ -1,19 +1,34 @@
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.collections import PatchCollection
 sns.set()
 
 
-def standard_plots(spike_time_trace, iapp_trace, vt, output=2000):
+def standard_plots(out, output=2000):
     ax = plt.subplot(211)
-    plot_spike_times(spike_time_trace, output=output, axg=ax)
+    plot_spike_times(out.spike_time_trace, output=output, axg=ax)
+    overlay_offsets(out.offsets)
     ax = plt.subplot(223)
-    plot_trace(np.array(iapp_trace), axg=ax)
+    plot_trace(np.array(out.iapp_trace), axg=ax)
     ax.set_title('Current to output neuron')
+    overlay_offsets(out.offsets)
     ax = plt.subplot(224)
-    plot_trace(vt[0, :], axg=ax)
+    plot_trace(out.vt[0, :], axg=ax)
     ax.set_title('Voltage trace')
+    overlay_offsets(out.offsets)
+    plt.tight_layout()
     plt.show()
+
+def overlay_offsets(offsets, axg=None):
+    ax = axg if axg else plt.gca()
+    rects = []
+    ybot, ytop = ax.get_ylim()
+    for offset in offsets:
+        rect = plt.Rectangle((offset, ybot), 70, ytop - ybot)
+        rects.append(rect)
+    pc = PatchCollection(rects, alpha=0.3)
+    ax.add_collection(pc)
 
 def plot_delays_variances(delayst, variancest):
     ax0=plt.subplot(211)

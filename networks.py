@@ -15,7 +15,7 @@ class Network(object):
         self.w[0:self.N_inp, self.N_inp:] = 1
         self.connections = np.nonzero(self.w)
 
-        self.fgi = 0.0230
+        self.fgi = 0.0226
 
         self.v_rest = -65
         self.v_reset = -70
@@ -27,11 +27,11 @@ class Network(object):
         self.variance_max = 10
         self.delay_max = 20
 
-        self.test_seconds = 0
+        self.test_seconds = 2
 
         self.a1 = 3
         self.a2 = 20
         self.b1 = 20
         self.b2 = 20
-        self.nu = 0.16
+        self.nu = 0.04
         self.nv = 0.04
