@@ -12,31 +12,10 @@ def main():
     run_simulation()
 
 def run_simulation():
-    array_idx = 1
-    exp_filename = 'LOCAL'
-    exp_params = {
-        'variable'      :   'fgi',
-        'var_min'       :   0.0226,
-        'var_max'       :   0.0227,
-        'var_step'      :   0.0001,
-        'repeats'       :   3,
-        'job_name'      :   'LOCALJOB',
-        'output_folder' :   'LOCAL',
-    }
 
-    assert len(sys.argv) < 4, "Too Many input arguments."
+    exp_params, task_id, slurm_id = get_exp_params()
 
-    if len(sys.argv) > 1:
-        exp_filename = sys.argv[1]
-        exp_base_filename = sys.argv[1].strip('.json')
-        exp_params = load_exp_param_file(exp_filename)
-
-    if len(sys.argv) > 2:
-        array_idx = int(sys.argv[2])
-        # Update output filename
-        exp_params['output_folder'] = f"{exp_base_filename}"
-    
-    value, repeat = exp_values_from_index(exp_params, array_idx)
+    value, repeat = exp_values_from_index(exp_params, task_id)
 
     net = Network()
     
@@ -44,20 +23,7 @@ def run_simulation():
     setattr(net, exp_params['variable'], value)
     net.repeat = repeat
 
-    sim_params = SimulationParameters()
-    sim_params.array_idx = array_idx
-    _,_,slurmid = exp_params['output_folder'].split('_')
-    sim_params.output_folder = f'{exp_params["job_name"]}_{slurmid}'
-    sim_params.exp_base_filename = f'{sim_params.output_folder}_{array_idx}'
-    sim_params.sim_time_sec = 10
-    sim_params.time_execution = False #True
-    #sim_params.inp_idxs, sim_params.inp_ts = get_input(net, sim_params)
-    sim_params.p_inp = np.arange(0, 500)
-    sim_params.p_ts = np.reshape(np.tile(np.arange(0, 50), (10, 1)), (-1), order='F')
-    sim_params.data_fcn = lambda : embedded_pattern(50, 10, 2000, 500, 5, sim_params.p_inp, sim_params.p_ts, None, 0.0)
-    sim_params.voltages_to_save = np.array([net.N-1], dtype=np.int32)
-    sim_params.delays_to_save = np.array([], dtype=np.int32)
-    sim_params.variances_to_save = np.array([], dtype=np.int32)
+    sim_params = SimulationParameters(exp_params, slurm_id, task_id)
 
     #print(sim_params.inp_idxs.shape, sim_params.inp_ts.shape)
     out = simulate(net, sim_params)
@@ -73,9 +39,36 @@ def run_simulation():
 
     #standard_plots(nout)
 
+def get_exp_params():
+    """ Return the exp_params dict object and the task ID
+    """
+    array_idx = 1
+    slurm_id = 1
+    exp_params = {
+        'variable'      :   'fgi',
+        'var_min'       :   0.0226,
+        'var_max'       :   0.0227,
+        'var_step'      :   0.0001,
+        'repeats'       :   3,
+        'job_name'      :   'LOCALJOB',
+        'running_ntasks':   1,
+    }
+
+    assert len(sys.argv) < 4, "Too Many input arguments."
+
+    if len(sys.argv) > 1:
+        exp_filename = sys.argv[1]
+        exp_params = load_exp_param_file(exp_filename)
+        _,_,slurm_id = exp_filename.strip('.json').split('_')
+
+    if len(sys.argv) > 2:
+        array_idx = int(sys.argv[2])
+    
+    return exp_params, array_idx, slurm_id
+
 def save_experiment(net, out, sim_params):
     # spike_time_trace, vt, iapp, offsets, 
-    np.savez(f'{sim_params.output_folder}/{sim_params.exp_base_filename}.npz', 
+    np.savez(f'{sim_params.output_folder}/{sim_params.output_base_filename}.npz', 
                                     spike_time_trace=out.spike_time_trace,
                                     vt=out.vt,
                                     result=out.result,

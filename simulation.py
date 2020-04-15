@@ -18,6 +18,7 @@ def simulate(net, sim_params):
     #inp_idxs = np.random.randint(0, net.N-1, net.N * 10 * sim_time_sec)
     #inp_ts = np.random.randint(0, sim_time_sec * MSPERSEC, net.N * 10 * sim_time_sec)
 
+
     current_steps = 40
     upcoming_current = np.zeros([net.N, current_steps])
     upcur_idx = 0
@@ -65,8 +66,8 @@ def simulate(net, sim_params):
         #fired_inputs = inp_idxs[inp_ts == time]
 
         cur_ms = time % MSPERSEC
-        if cur_ms == 0: # Generate next second worth of data
-            sim_params.inp_idxs, sim_params.inp_ts, offsets = sim_params.data_fcn()
+        if not sim_params.input_provided and cur_ms == 0: # Generate next second worth of data
+            sim_params.inp_idxs, sim_params.inp_ts, offsets = sim_params.data_fcn(net.N_inp)
             out.offsets.append(np.array(offsets) + time)
         fired_inputs = sim_params.inp_idxs[sim_params.inp_ts == cur_ms]
 
@@ -187,8 +188,8 @@ def simulate(net, sim_params):
         out.sim_timer.log_time(time)
 
     
-        if time > 0 and time % 10000 == 0:
-            logger.info(f'{time // 1000} seconds, {(timer.time() - start_time) / (time // 1000)} s/ss')
+        if time > 0 and time % (10 * MSPERSEC) == 0:
+            logger.info(f'{time // MSPERSEC} seconds, {(timer.time() - start_time) / (time // MSPERSEC)} s/ss')
 
     # Combine lists of arrays into a single array
     out.spike_time_trace = np.concatenate(out.spike_time_trace)
@@ -200,32 +201,49 @@ def simulate(net, sim_params):
     return out
 
 class SimulationParameters():
-    def __init__(self, inp_idxs=None, inp_ts=None):
-        self.sim_time_sec = 2
-        self.time_execution = False
-        self.inp_idxs = inp_idxs
-        self.inp_ts = inp_ts
+    def __init__(self, exp_params, slurm_id=1, task_id=1):
+        assert self.validate_params(exp_params), 'exp_params not valid'
+        self.exp_params = exp_params
+        self.slurm_id = slurm_id
+        self.task_id = task_id
+        for key, value in exp_params.items():
+            setattr(self, key, value)
+
         self.input_provided = True
-        if not inp_idxs or not inp_ts:
+        if not self.inp_idxs or not self.inp_ts:
             print('Input data not provided or incomplete, generating every second')
-            self.generate_input = False
+            self.input_provided = False
 
-        self.Tp = 50
+        # If there is no input and no datafcn provided make one
+        if not self.input_provided and not self.data_fcn:
+            if not self.p_inp or not self.p_ts: # No pattern, make one
+                self.p_inp = np.arange(0, 500)
+                self.p_ts = np.reshape(np.tile(np.arange(0, self.Tp), (10, 1)), (-1), order='F')
+            
+            if self.inp_type == st.STANDARDINPUT:
+                self.data_fcn = lambda n_inp : embedded_pattern(self.Tp, self.Df, n_inp, 500, self.Pf, self.p_inp, self.p_ts, None, 0.0)
+            else:
+                raise Exception(f'Unknown inp_type: {self.inp_type}. Cannot create input for simulation.')
+        
+        self.voltages_to_save = np.array([] if not self.voltages_to_save else self.voltages_to_save, dtype=np.int32) 
+        self.delays_to_save = np.array([] if not self.delays_to_save else self.delays_to_save, dtype=np.int32)
+        self.variances_to_save = np.array([] if not self.variances_to_save else self.variances_to_save, dtype=np.int32)
 
-        self.voltages_to_save = np.array([])
-        self.delays_to_save = np.array([])
-        self.variances_to_save = np.array([])
 
-    # def get_fired_inputs(self, time):
-    #     cur_ms = time
-    #     if not self.input_provided:
-    #         cur_ms = time % MSPERSEC
-    #         if cur_ms == 0: # Generate next second worth of dat
-    #             self.inp_idxs, self.inp_ts = self.generate_input()
-    #     return self.inp_idxs[self.inp_ts == cur_ms]
+    @property
+    def output_folder(self):
+        return f'{self.job_name}_{self.slurm_id}'
 
-    # def generate_input(self):
-    #     return embedded_pattern(50, 10, 2000, 500, 5, p_inp, p_ts, None, 0.0)
+    @property
+    def output_base_filename(self):
+        return f'{self.output_folder}_{self.task_id}'
+
+    @property
+    def full_filepath(self):
+        return f'{self.output_folder}/{self.output_base_filename}'
+
+    def validate_params(self, exp_params):
+        return True # TODO : Verify required params exist
 
 
 class SimulationOuput():

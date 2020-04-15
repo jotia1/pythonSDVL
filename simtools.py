@@ -3,6 +3,10 @@ import logging
 import time as timer
 
 MSPERSEC = 1000
+COMBINEFLAG='--combine'
+
+# Types of input data that can be used
+STANDARDINPUT='STANDARDINPUT'
 
 class SimulationTimer():
 

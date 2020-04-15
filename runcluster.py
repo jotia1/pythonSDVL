@@ -3,8 +3,7 @@ import subprocess
 import math
 import numpy as np
 import sys
-
-COMBINEFLAG='--combine'
+from simtools import *
 
 # JOBNAME_SLURMID/JOBNAME_SLURMID_TASKID
 
@@ -17,7 +16,20 @@ def run_slurm_array_job():
         'repeats'       :   3,
         'job_name'      :   'frq_test',
         'running_ntasks':   6,
-        'output_folder' :   './'
+        'sim_time_sec'  :   11,
+        'time_execution':   False,
+        'Tp'            :   50,
+        'Df'            :   10,
+        'Pf'            :   5,
+        'p_inp'         :   None,
+        'p_ts'          :   None,
+        'inp_idxs'      :   None,
+        'inp_ts'        :   None,
+        'inp_type'      :   STANDARDINPUT,
+        'data_fcn'      :   None,
+        'voltages_to_save': [2000],
+        'delays_to_save':   [],
+        'variances_to_save':[],    
     }
 
     tmp_exp_filename = 'tmp_exp_params.json'
@@ -69,7 +81,7 @@ def generate_header(tmp_exp_filename, sbatch_params):
             'done',
             'srun python3 runexperiment.py $EXP_PARAM_FILENAME $SLURM_ARRAY_TASK_ID',
             'if [[ $SLURM_ARRAY_TASK_ID -eq $SLURM_ARRAY_TASK_MAX ]]; then',
-            f'  srun python3 runcluster.py {COMBINEFLAG} $EXP_PARAM_FILENAME $SLURM_ARRAY_JOB_ID',
+            #f'  srun python3 runcluster.py {COMBINEFLAG} $EXP_PARAM_FILENAME $SLURM_ARRAY_JOB_ID',
             '  mv $SLURM_JOB_NAME.sbatch $OUTPUT_DIR/',
             '  mv $EXP_PARAM_FILENAME $OUTPUT_DIR/',
             'fi',
@@ -78,14 +90,7 @@ def generate_header(tmp_exp_filename, sbatch_params):
 
     return script
 
-def get_output_folder(job_name, slurmid):
-    return f'{job_name}_{slurmid}'
 
-def get_base_output_filename(job_name, slurmid, taskid):
-    return f'{get_output_folder(job_name, slurmid)}_{taskid}'
-
-def get_sim_full_filepath(job_name, slurmid, taskid):
-    return f'{get_output_folder(job_name, slurmid)}/{get_base_output_filename(job_name, slurmid, taskid)}'
 
 def make_sbatch_header(sbatch_params):
     header = ['#!/bin/bash\n']
@@ -127,20 +132,27 @@ def exp_values_from_index(exp_params, index):
     
     return value, repeat
 
-def combine_results(exp_params_filename, slurmid):
-    output_folder = exp_params_filename.strip('.json')
-    exp_params = load_exp_param_file(exp_params_filename)
-    print(exp_params)
+# def combine_results(exp_params_filename, slurmid):
+#     output_folder = exp_params_filename.strip('.json')
+#     exp_params = load_exp_param_file(exp_params_filename)
+#     print(exp_params)
 
-    for taskid in range(calc_ntasks(exp_params)):
-        file_str = get_sim_full_filepath(exp_params.get('job_name'), slurmid, taskid)
-        print(file_str)
+#     ntasks = calc_ntasks(exp_params);
+#     results = []
+#     for taskid in range(ntasks):
+#         value, repeat = exp_values_from_index(exp_params, taskid)
+#         file_str = get_sim_full_filepath(exp_params.get('job_name'), slurmid, taskid) + '.npz'
+#         data = np.load(file_str)
+#         results.append(data['results'])
+    
+#     return np.array(results).reshape((-1, exp_params.get('repeats')))
 
 
 def main():
     print("run cluster argv: ", sys.argv)
     if len(sys.argv) == 4 and sys.argv[1] == COMBINEFLAG:
-        combine_results(sys.argv[2], sys.argv[3])
+        #print(combine_results(sys.argv[2], sys.argv[3]))
+        raise NotImplementedError()
     else:
         run_slurm_array_job()
 
