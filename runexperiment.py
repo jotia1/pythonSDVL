@@ -46,9 +46,9 @@ def run_simulation():
 
     sim_params = SimulationParameters()
     sim_params.array_idx = array_idx
-    sim_params.output_folder = exp_params.output_folder
+    sim_params.output_folder = exp_params['output_folder']
     sim_params.exp_base_filename = exp_base_filename
-    sim_params.sim_time_sec = 3
+    sim_params.sim_time_sec = 150
     sim_params.time_execution = False #True
     #sim_params.inp_idxs, sim_params.inp_ts = get_input(net, sim_params)
     sim_params.p_inp = np.arange(0, 500)
@@ -65,18 +65,19 @@ def run_simulation():
     out.spike_time_trace = out.spike_time_trace[out.spike_time_trace[:, 1] == net.N-1, :]
 
     #print(out.sim_timer.get_percentages())
-    print(trueposxtrueneg(net, out, sim_params))
+    out.result = trueposxtrueneg(net, out, sim_params)
     save_experiment(net, out, sim_params)
 
-    nout = load_experiment(f'{sim_params.output_folder}/{sim_params.exp_base_filename}.npz')
+    #nout = load_experiment(f'{sim_params.output_folder}/{sim_params.exp_base_filename}.npz')
 
-    standard_plots(nout)
+    #standard_plots(nout)
 
 def save_experiment(net, out, sim_params):
     # spike_time_trace, vt, iapp, offsets, 
     np.savez(f'{sim_params.output_folder}/{sim_params.exp_base_filename}.npz', 
                                     spike_time_trace=out.spike_time_trace,
                                     vt=out.vt,
+                                    result=out.result,
                                     iapp_trace=out.iapp_trace,
                                     offsets=out.offsets)
 
@@ -85,6 +86,7 @@ def load_experiment(filename):
     out = SimulationOuput()
     out.spike_time_trace = npz['spike_time_trace']
     out.vt = npz['vt']
+    out.result = npz['result']
     out.iapp_trace = npz['iapp_trace']
     out.offsets = npz['offsets']
     return out

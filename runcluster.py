@@ -33,6 +33,7 @@ def run_slurm_array_job():
         'time'      :   '01:00:00',
         'partition' :   'batch',
         'ntasks'    :   '1',
+        'output'    :   f'{job_name}_%A_%a.out',
     }
 
     ## Build and write sbatch script
@@ -49,7 +50,10 @@ def run_slurm_array_job():
 def generate_header(tmp_exp_filename, sbatch_params):
     script = make_sbatch_header(sbatch_params)
     script += '\n' * 2
-    script += '\n'.join(['EXP_PARAM_FILENAME=\"exp_params_$SLURM_ARRAY_JOB_ID.json\"',
+    script += '\n'.join(['echo \"script running\"',
+            'OUTPUT_DIR=\"$SLURM_JOB_NAME\"_$SLURM_ARRAY_JOB_ID',
+            'mkdir $OUTPUT_DIR',
+            'EXP_PARAM_FILENAME=\"exp_params_$SLURM_ARRAY_JOB_ID.json\"',
             'if [[ $SLURM_ARRAY_TASK_ID -eq 1 ]]; then',
             f'  \tmv {tmp_exp_filename} $EXP_PARAM_FILENAME',
             'fi',
@@ -59,7 +63,11 @@ def generate_header(tmp_exp_filename, sbatch_params):
             'srun python3 runexperiment.py $EXP_PARAM_FILENAME $SLURM_ARRAY_TASK_ID',
             'if [[ $SLURM_ARRAY_TASK_ID -eq $SLURM_ARRAY_TASK_MAX ]]; then',
             '  \tsrun python3 runcluser.py {COMBINEFLAG} $EXP_PARAM_FILENAME $SLURM_ARRAY_JOB_ID',
-            'fi'])
+            'fi',
+            'mv "$OUTPUT_DIR"_"$SLURM_ARRAY_TASK_ID".out $OUTPUT_DIR/',
+            'mv $SLURM_JOB_NAME.sbatch $OUTPUT_DIR/',
+            'mv $EXP_PARAM_FILENAME $OUTPUT_DIR/'])
+
     return script
 
 def get_output_folder(job_name, slurmid):
