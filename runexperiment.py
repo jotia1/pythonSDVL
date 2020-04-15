@@ -1,5 +1,5 @@
 import sys
-from runner import *
+from runcluster import *
 from networks import *
 from simulation import *
 from datasource import *
@@ -9,26 +9,32 @@ from metrics import *
 
 
 def main():
+    run_simulation()
 
+def run_simulation():
     array_idx = 1
     exp_filename = 'LOCAL'
     exp_params = {
-        'variable'  :   'fgi',
-        'var_min'   :   0.0226,
-        'var_max'   :   0.0227,
-        'var_step'  :   0.0001,
-        'repeats'   :   3,
-        'job_name'  :   'LOCAL'
+        'variable'      :   'fgi',
+        'var_min'       :   0.0226,
+        'var_max'       :   0.0227,
+        'var_step'      :   0.0001,
+        'repeats'       :   3,
+        'job_name'      :   'LOCALJOB',
+        'output_folder' :   'LOCAL',
     }
 
     assert len(sys.argv) < 4, "Too Many input arguments."
 
     if len(sys.argv) > 1:
         exp_filename = sys.argv[1]
+        exp_base_filename = sys.argv[1].strip('.json')
         exp_params = load_exp_param_file(exp_filename)
 
     if len(sys.argv) > 2:
         array_idx = int(sys.argv[2])
+        # Update output filename
+        exp_params['output_folder'] = f"{exp_base_filename}"
     
     value, repeat = exp_values_from_index(exp_params, array_idx)
 
@@ -40,7 +46,8 @@ def main():
 
     sim_params = SimulationParameters()
     sim_params.array_idx = array_idx
-    sim_params.exp_filename = exp_filename
+    sim_params.output_folder = exp_params.output_folder
+    sim_params.exp_base_filename = exp_base_filename
     sim_params.sim_time_sec = 3
     sim_params.time_execution = False #True
     #sim_params.inp_idxs, sim_params.inp_ts = get_input(net, sim_params)
@@ -61,13 +68,13 @@ def main():
     print(trueposxtrueneg(net, out, sim_params))
     save_experiment(net, out, sim_params)
 
-    nout = load_experiment('LOCAL.npz')
+    nout = load_experiment(f'{sim_params.output_folder}/{sim_params.exp_base_filename}.npz')
 
     standard_plots(nout)
 
 def save_experiment(net, out, sim_params):
     # spike_time_trace, vt, iapp, offsets, 
-    np.savez(f'{sim_params.exp_filename}.npz', 
+    np.savez(f'{sim_params.output_folder}/{sim_params.exp_base_filename}.npz', 
                                     spike_time_trace=out.spike_time_trace,
                                     vt=out.vt,
                                     iapp_trace=out.iapp_trace,
