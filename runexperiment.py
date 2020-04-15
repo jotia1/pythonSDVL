@@ -46,9 +46,10 @@ def run_simulation():
 
     sim_params = SimulationParameters()
     sim_params.array_idx = array_idx
-    sim_params.output_folder = exp_params['output_folder']
-    sim_params.exp_base_filename = exp_base_filename
-    sim_params.sim_time_sec = 150
+    _,_,slurmid = exp_params['output_folder'].split('_')
+    sim_params.output_folder = f'{exp_params["job_name"]}_{slurmid}'
+    sim_params.exp_base_filename = f'{sim_params.output_folder}_{array_idx}'
+    sim_params.sim_time_sec = 10
     sim_params.time_execution = False #True
     #sim_params.inp_idxs, sim_params.inp_ts = get_input(net, sim_params)
     sim_params.p_inp = np.arange(0, 500)

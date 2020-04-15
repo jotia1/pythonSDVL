@@ -16,7 +16,7 @@ def run_slurm_array_job():
         'var_step'      :   1,
         'repeats'       :   3,
         'job_name'      :   'frq_test',
-        'running_ntasks':   2,
+        'running_ntasks':   6,
         'output_folder' :   './'
     }
 
@@ -52,21 +52,29 @@ def generate_header(tmp_exp_filename, sbatch_params):
     script += '\n' * 2
     script += '\n'.join(['echo \"script running\"',
             'OUTPUT_DIR=\"$SLURM_JOB_NAME\"_$SLURM_ARRAY_JOB_ID',
-            'mkdir $OUTPUT_DIR',
             'EXP_PARAM_FILENAME=\"exp_params_$SLURM_ARRAY_JOB_ID.json\"',
             'if [[ $SLURM_ARRAY_TASK_ID -eq 1 ]]; then',
-            f'  \tmv {tmp_exp_filename} $EXP_PARAM_FILENAME',
+            '  mkdir $OUTPUT_DIR',
+            f'  mv {tmp_exp_filename} $EXP_PARAM_FILENAME',
             'fi',
-            'if [ ! -e $EXP_PARAM_FILENAME ]; then',
-            '  \tssleep 5',
-            'fi',
+            'counter=1',
+            'while [ ! -e $EXP_PARAM_FILENAME ]; do',
+            '  if [ $counter -ge 10 ]; then',
+            '    echo "Could not find param file after long sleep, exiting."',
+            '    exit 1',
+            '  fi',
+            '  echo "Cannot find params, sleep for 5 seconds..."',
+            '  sleep 5',
+            '  counter=$(( $counter + 1 ))',
+            'done',
             'srun python3 runexperiment.py $EXP_PARAM_FILENAME $SLURM_ARRAY_TASK_ID',
             'if [[ $SLURM_ARRAY_TASK_ID -eq $SLURM_ARRAY_TASK_MAX ]]; then',
-            '  \tsrun python3 runcluser.py {COMBINEFLAG} $EXP_PARAM_FILENAME $SLURM_ARRAY_JOB_ID',
+            f'  srun python3 runcluster.py {COMBINEFLAG} $EXP_PARAM_FILENAME $SLURM_ARRAY_JOB_ID',
+            '  mv $SLURM_JOB_NAME.sbatch $OUTPUT_DIR/',
+            '  mv $EXP_PARAM_FILENAME $OUTPUT_DIR/',
             'fi',
             'mv "$OUTPUT_DIR"_"$SLURM_ARRAY_TASK_ID".out $OUTPUT_DIR/',
-            'mv $SLURM_JOB_NAME.sbatch $OUTPUT_DIR/',
-            'mv $EXP_PARAM_FILENAME $OUTPUT_DIR/'])
+    ])
 
     return script
 
@@ -130,6 +138,7 @@ def combine_results(exp_params_filename, slurmid):
 
 
 def main():
+    print("run cluster argv: ", sys.argv)
     if len(sys.argv) == 4 and sys.argv[1] == COMBINEFLAG:
         combine_results(sys.argv[2], sys.argv[3])
     else:
