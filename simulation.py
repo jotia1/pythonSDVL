@@ -48,7 +48,8 @@ def simulate(net, sim_params):
     start_time = timer.time()
     out.sim_timer = st.SimulationTimer(sim_params.time_execution)
     for time in range(sim_time_ms):
-        #logger.debug(f'Timestep: {time} ms')
+        #if time % 100 == 0:
+        #    logger.debug(f'Timestep: {time} ms')
 
         out.sim_timer.log_time(time)
 
@@ -67,9 +68,9 @@ def simulate(net, sim_params):
 
         cur_ms = time % MSPERSEC
         if not sim_params.input_provided and cur_ms == 0: # Generate next second worth of data
-            sim_params.inp_idxs, sim_params.inp_ts, offsets = sim_params.data_fcn(net.N_inp)
+            inp_idxs, inp_ts, offsets = sim_params.data_fcn(net.N_inp)
             out.offsets.append(np.array(offsets) + time)
-        fired_inputs = sim_params.inp_idxs[sim_params.inp_ts == cur_ms]
+        fired_inputs = inp_idxs[inp_ts == cur_ms]
 
         fired = np.concatenate((fired_naturally, fired_inputs))
         fired_spike_times = np.concatenate((time * np.ones(fired.shape).reshape((-1, 1)), fired.reshape((-1, 1))), axis=1)

@@ -3,6 +3,7 @@ import logging
 import time as timer
 from datasource import embedded_pattern, test_case
 from networks import *
+import json
 
 MSPERSEC = 1000
 COMBINEFLAG='--combine'
@@ -10,6 +11,28 @@ COMBINEFLAG='--combine'
 # Types of input data that can be used
 STANDARDINPUT='STANDARDINPUT'
 TESTINPUT='TESTINPUT'
+
+ALLSIMPARAMS = {
+    'sim_time_sec',
+    'time_execution',
+    'Tp',
+    'Df',
+    'Pf',
+    'naf',
+    'test_seconds',  
+    'p_inp',
+    'p_ts',
+    'inp_idxs',
+    'inp_ts',
+    'inp_type',
+    'data_fcn',
+    'voltages_to_save',
+    'delays_to_save',
+    'variances_to_save',  
+    'net_params_dict',
+    'output_folder',
+    'output_base_filename',
+}
 
 class SimulationTimer():
 
@@ -57,7 +80,11 @@ class SimulationTimer():
     def reset(self):
         self.times = {}
 
-class SimulationParameters():
+
+
+
+
+class OldSimulationParameters():
     def __init__(self, exp_params, slurm_id=1, task_id=1):
         assert self.validate_params(exp_params), 'exp_params not valid'
         self.exp_params = exp_params
@@ -112,8 +139,6 @@ class SimulationParameters():
     def validate_params(self, exp_params):
         return True # TODO : Verify required params exist
 
-    def build_network(self):
-        return Network()
 
 class SimulationOuput():
     def __init__(self):
@@ -124,9 +149,108 @@ class SimulationOuput():
         self.iapp_trace = None
         self.spike_time_trace = None
 
+class ParametersObject():
+    _all_params = set()
+    def __init__(self, from_dict):
+        self.from_dict = from_dict
+        if from_dict:
+            self.load_from_dict(from_dict)
 
-class NetworkParameters():
-    def __init__(self, from_dict=None):
+    def load_from_dict(self, from_dict):
+        missing = self.missing_params(from_dict)
+        if len(missing) != 0:
+            raise Exception(f"Parameters missing: {missing}")
+
+        if not self.is_valid(from_dict):
+            raise Exception("From dict not valid.")
+
+        for key, value in from_dict.items():
+            setattr(self, key, value)
+
+    def missing_params(self, from_dict):
+        missing = []
+        for param in self._all_params:
+            if param not in from_dict.keys():
+                missing.append(param)
+        return missing
+
+    def to_dict(self):
+        params_dict = {}
+        for key in self._all_params:
+            params_dict[key] = getattr(self, key)
+        return params_dict
+
+    def is_valid(self, from_dict):
+        """ Returns True iff the given dict has a key for each value
+            required for a Parameter Object
+        """
+        return from_dict != None and self.missing_params(from_dict) == []
+
+
+class SimulationParameters(ParametersObject):
+    _all_params = ALLSIMPARAMS
+    def __init__(self, from_dict):
+        # For the sake of linting...
+        self.sim_time_sec = None
+        self.time_execution  = None
+        self.Tp = None
+        self.Df = None
+        self.Pf = None
+        self.naf = None
+        self.test_seconds = None
+        self.p_inp = None
+        self.p_ts = None
+        self.inp_idxs = None
+        self.inp_ts = None
+        self.inp_type = None
+        self.data_fcn = None
+        self.voltages_to_save = None
+        self.delays_to_save = None
+        self.variances_to_save  = None
+        self.net_params_dict = None
+        self.output_folder = None
+        self.output_base_filename = None
+
+        super().__init__(from_dict)
+
+        self.voltages_to_save = np.array([] if not self.voltages_to_save else self.voltages_to_save, dtype=np.int32) 
+        self.delays_to_save = np.array([] if not self.delays_to_save else self.delays_to_save, dtype=np.int32)
+        self.variances_to_save = np.array([] if not self.variances_to_save else self.variances_to_save, dtype=np.int32)
+
+
+        # self.voltages_to_save = np.array(self.voltages_to_save)
+        # self.delays_to_save = np.array(self.delays_to_save)
+        # self.variances_to_save = np.array(self.variances_to_save)
+
+        self.setup_input()
+
+    def setup_input(self):
+        # TODO : Make dynamic and general
+        print('USING HARDCODED DATA FUNCTION')
+        self.input_provided = False
+
+        if self.inp_type == STANDARDINPUT:
+            self.p_inp = np.arange(0, 500)
+            self.p_ts = np.reshape(np.tile(np.arange(0, self.Tp), (10, 1)), (-1), order='F')
+            self.data_fcn = lambda n_inp : embedded_pattern(self.Tp, self.Df, n_inp, self.naf, self.Pf, self.p_inp, self.p_ts, None, 0.0)
+        elif self.inp_type == TESTINPUT:
+            self.data_fcn = test_case
+
+    def build_network(self):
+        return Network(self.net_params_dict)
+
+    def to_dict(self):
+        sim_params_dict = super().to_dict()
+        sim_params_dict['data_fcn'] = None
+        sim_params_dict['voltages_to_save'] = self.voltages_to_save.to_list()
+        sim_params_dict['delays_to_save'] = self.delays_to_save.to_list()
+        sim_params_dict['variances_to_save'] = self.variances_to_save.to_list()
+        return sim_params_dict
+        
+
+class NetworkParameters(ParametersObject):
+    _all_params = set()  # TODO if we use this class
+    def __init__(self, from_dict):
         self.group_sizes = None
         self.N_inp = None
         self.N = None
@@ -134,6 +258,7 @@ class NetworkParameters():
         self.delay_init = None
         self.variance_init = None
         self.w_init = None
+        self.connections = None
 
         self.fgi = None
 
@@ -143,7 +268,6 @@ class NetworkParameters():
         self.neuron_tau = None
         self.w_max = None
         
-        self.connections = None
         self.varaince_min = None
         self.variance_max = None
         self.delay_max = None
@@ -155,27 +279,31 @@ class NetworkParameters():
         self.nu = None
         self.nv = None
 
-        self.from_dict = from_dict
-        if from_dict:
-            self.load_from_dict(from_dict)
+        super().__init__(from_dict)
 
-    def load_from_dict(self, from_dict):
-        if not self.is_valid(from_dict):
-            raise Exception("From dict not valid.")
 
-        for key, value in from_dict.items():
-            setattr(self, key, value)
+def save_sim_params(filename, sim_params):
+    sim_params_dict = sim_params.to_dict()
+    save_dict(filename, sim_params_dict)
 
-    def to_dict(self):
-        return self.__dict__
+def save_dict(filename, data):
+    with open(filename, 'w') as fp:
+        json.dump(data, fp, sort_keys=True, indent=4)
 
-    def is_valid(self, from_dict):
-        return from_dict != None
+def load_dict(filename):
+    with open(filename, 'r') as fp:
+        data = json.load(fp)
+    return data
 
-def save_experiment(net, out, sim_params):
+def load_sim_params(filename):
+    sim_params_dict = load_dict(filename)
+    return SimulationParameters(sim_params_dict)
+
+
+def save_experiment(net, out, sim_params, only_output=True):
     # spike_time_trace, vt, iapp, offsets, 
     np.savez(f'{sim_params.output_folder}/{sim_params.output_base_filename}.npz', 
-                                    spike_time_trace=out.spike_time_trace,
+                                    spike_time_trace=out.spike_time_trace[out.spike_time_trace[:, 1] == net.N-1, :] if only_output else out.spike_time_trace,
                                     vt=out.vt,
                                     result=out.result,
                                     iapp_trace=out.iapp_trace,
@@ -186,10 +314,9 @@ def save_experiment(net, out, sim_params):
 def load_experiment(filename):
     npz = np.load(filename)
     out = SimulationOuput()
-    print(type(npz))
     for key,value in npz.items():
         setattr(out, key, value)
-    return net, out, sim_params
+    return out
     # out.spike_time_trace = npz['spike_time_trace']
     # out.vt = npz['vt']
     # out.result = npz['result']
