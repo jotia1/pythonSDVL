@@ -10,7 +10,7 @@ DELAYMIN = 1
 
 def simulate(net, sim_params):
     logger = st.setup_logging(f"{__name__}.simulate")
-    out = SimulationOuput()
+    out = st.SimulationOuput()
 
     sim_time_sec = sim_params.sim_time_sec
     sim_time_ms = sim_time_sec * MSPERSEC
@@ -140,7 +140,7 @@ def simulate(net, sim_params):
         out.sim_timer.log_time(time) 
         ##      SDVL
         # Do not adjust synapses during testing
-        if time < ((sim_time_sec - net.test_seconds) * MSPERSEC):
+        if time < ((sim_time_sec - sim_params.test_seconds) * MSPERSEC):
 
             out.sim_timer.log_time(time)
 
@@ -193,6 +193,8 @@ def simulate(net, sim_params):
 
     # Combine lists of arrays into a single array
     out.spike_time_trace = np.concatenate(out.spike_time_trace)
+    if not out.offsets:
+        out.offsets = np.array([[0]])
     out.offsets = np.concatenate(out.offsets)
 
     print('Time taken: ', timer.time() - start_time)
@@ -200,58 +202,6 @@ def simulate(net, sim_params):
 
     return out
 
-class SimulationParameters():
-    def __init__(self, exp_params, slurm_id=1, task_id=1):
-        assert self.validate_params(exp_params), 'exp_params not valid'
-        self.exp_params = exp_params
-        self.slurm_id = slurm_id
-        self.task_id = task_id
-        for key, value in exp_params.items():
-            setattr(self, key, value)
-
-        self.input_provided = True
-        if not self.inp_idxs or not self.inp_ts:
-            print('Input data not provided or incomplete, generating every second')
-            self.input_provided = False
-
-        # If there is no input and no datafcn provided make one
-        if not self.input_provided and not self.data_fcn:
-            if not self.p_inp or not self.p_ts: # No pattern, make one
-                self.p_inp = np.arange(0, 500)
-                self.p_ts = np.reshape(np.tile(np.arange(0, self.Tp), (10, 1)), (-1), order='F')
-            
-            if self.inp_type == st.STANDARDINPUT:
-                self.data_fcn = lambda n_inp : embedded_pattern(self.Tp, self.Df, n_inp, 500, self.Pf, self.p_inp, self.p_ts, None, 0.0)
-            else:
-                raise Exception(f'Unknown inp_type: {self.inp_type}. Cannot create input for simulation.')
-        
-        self.voltages_to_save = np.array([] if not self.voltages_to_save else self.voltages_to_save, dtype=np.int32) 
-        self.delays_to_save = np.array([] if not self.delays_to_save else self.delays_to_save, dtype=np.int32)
-        self.variances_to_save = np.array([] if not self.variances_to_save else self.variances_to_save, dtype=np.int32)
-
-
-    @property
-    def output_folder(self):
-        return f'{self.job_name}_{self.slurm_id}'
-
-    @property
-    def output_base_filename(self):
-        return f'{self.output_folder}_{self.task_id}'
-
-    @property
-    def full_filepath(self):
-        return f'{self.output_folder}/{self.output_base_filename}'
-
-    def validate_params(self, exp_params):
-        return True # TODO : Verify required params exist
-
-
-class SimulationOuput():
-    def __init__(self):
-        self.sim_timer = None
-        self.vt = None
-        self.iapp_trace = None
-        self.spike_time_trace = None
 
 def getlookuptable(var_range, delays_range, steps_range, fgi):
     """ Table for postsynaptic currents for given delay and variance
@@ -261,7 +211,7 @@ def getlookuptable(var_range, delays_range, steps_range, fgi):
     time step for the given delay and variance.
     """
     logger = st.setup_logging(f'{__name__}.getlookuptable')
-    accuracy = 0.01
+    accuracy = 0.001
     ptable_filename = f"ptables/ptable_{str(fgi).replace('.', '')}_{str(accuracy).replace('.', '')}.npy"
     
     try:

@@ -5,6 +5,24 @@ from matplotlib.collections import PatchCollection
 sns.set()
 
 
+def standard_plots_ipython(out, output=2000):
+    ax = plt.subplot(311)
+    plt.gcf().set_size_inches(26, 8*3, forward=True)
+    plot_spike_times(out.spike_time_trace, output=output, axg=ax)
+    overlay_offsets(out.offsets)
+    ax = plt.subplot(312)
+    plt.gcf().set_size_inches(26, 8*3, forward=True)
+    plot_trace(np.array(out.iapp_trace), axg=ax)
+    ax.set_title('Current to output neuron')
+    overlay_offsets(out.offsets)
+    ax = plt.subplot(313)
+    plt.gcf().set_size_inches(26, 8*3, forward=True)
+    plot_trace(out.vt[0, :], axg=ax)
+    ax.set_title('Voltage trace')
+    overlay_offsets(out.offsets)
+    plt.tight_layout()
+    plt.show()
+
 def standard_plots(out, output=2000):
     ax = plt.subplot(211)
     plot_spike_times(out.spike_time_trace, output=output, axg=ax)
@@ -30,9 +48,9 @@ def overlay_offsets(offsets, axg=None):
     pc = PatchCollection(rects, alpha=0.3)
     ax.add_collection(pc)
 
-def plot_delays_variances(delayst, variancest):
+def plot_delays_variances(delayst, variancest, num_to_plot=3):
     ax0=plt.subplot(211)
-    for i in range(3):
+    for i in range(num_to_plot):
         ax0.plot(delayst[i, 0, :])
     ax1=plt.subplot(212)
     ax0.set_title('Changes in delay and variance')
@@ -40,7 +58,7 @@ def plot_delays_variances(delayst, variancest):
     #ax0.set_xlabel('Simulation time (sec)')
     ax0.xaxis.set_visible(False)
     ax0.set_ylabel('Delay (ms)')
-    for i in range(3):
+    for i in range(num_to_plot):
         ax1.plot(variancest[i, 0, :] + 0.0 * i - 0.0, label=f'Input #{i+1}')
     ax0.set_facecolor((0,0,0,0))
     ax1.set_facecolor((0,0,0,0))
@@ -50,6 +68,12 @@ def plot_delays_variances(delayst, variancest):
     ax1.set_ylabel('Variance')
     ax1.legend()
     plt.show()
+
+def iplot(fnc, *args, **kwargs):
+    ax = plt.gca()
+    plt.gcf().set_size_inches(26, 8, forward=True)
+    fnc(*args, **kwargs)
+    #overlay_offsets(out.offsets, axg=ax)
 
 def plot_spike_times(data, output=None, axg=None):
     """ Takes the spike_time_trace variable
@@ -73,6 +97,7 @@ def plot_spike_times(data, output=None, axg=None):
         ax.plot(data[output_spikes, 0], data[output_spikes, 1], '.r')
 
     None if axg else plt.show()
+    return axg
 
 def plot_trace(trace, axg=None):
     
@@ -81,3 +106,4 @@ def plot_trace(trace, axg=None):
     ax.plot(list(range(trace.size)), trace)
 
     None if axg else plt.show()
+    return axg

@@ -2,22 +2,136 @@ import sys
 from runcluster import *
 from networks import *
 from simulation import *
+from simtools import *
 from datasource import *
 from visualisation import *
 import numpy as np
 from metrics import *
+import argparse
 
 
-def main():
-    run_simulation()
+def get_default_exp_params():
+    return {
+        'variable'      :   'fgi',
+        'var_min'       :   0.0226,
+        'var_max'       :   0.0227,
+        'var_step'      :   0.0001,
+        'repeats'       :   1,
+        'job_name'      :   'local',
+        'running_ntasks':   1,
+        'sim_time_sec'  :   1,
+        'time_execution':   False,
+        'Tp'            :   50,
+        'Df'            :   10,
+        'Pf'            :   5,
+        'naf'           :   500,
+        'test_seconds'  :   0,  
+        'p_inp'         :   None,
+        'p_ts'          :   None,
+        'inp_idxs'      :   None,
+        'inp_ts'        :   None,
+        'inp_type'      :   STANDARDINPUT,
+        'data_fcn'      :   None,
+        'voltages_to_save': [2000],
+        'delays_to_save':   [2000],
+        'variances_to_save':[2000],  
+    }
 
-def run_simulation():
 
-    exp_params, task_id, slurm_id = get_exp_params()
+def run_simulation(net=None, sim_params=None):
+    """ The final step of preparation, assumes everything is well
+    ordered and sorted by now or uses defaultsdatetime A combination of a date and a time. Attributes: ()
+    """
+
+    if not net:
+        net = Network()
+    
+    if not sim_params:
+        exp_params = get_default_exp_params()
+        sim_params = SimulationParameters(exp_params)
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def run_experiment():
+    exp_params = {
+        'variable'      :   'fgi',
+        'var_min'       :   0.0226,
+        'var_max'       :   0.0227,
+        'var_step'      :   0.0001,
+        'repeats'       :   1,
+        'job_name'      :   'local',
+        'running_ntasks':   1,
+        'sim_time_sec'  :   1,
+        'time_execution':   False,
+        'Tp'            :   50,
+        'Df'            :   10,
+        'Pf'            :   5,
+        'naf'           :   500,
+        'test_seconds'  :   0,  
+        'p_inp'         :   None,
+        'p_ts'          :   None,
+        'inp_idxs'      :   None,
+        'inp_ts'        :   None,
+        'inp_type'      :   STANDARDINPUT,
+        'data_fcn'      :   None,
+        'voltages_to_save': [2000],
+        'delays_to_save':   [2000],
+        'variances_to_save':[2000],  
+    }
+    parser = argparse.ArgumentParser(description="Tools for running simulations on a slurm managed cluster.")
+    parser.add_argument('exp_params', help='exp_paras _file path')
+    parser.add_argument('task_id', help='Task id')
+    parser.add_argument('-c', '--cluster', help='Run as cluster script', action="store_true")
+    args = parser.parse_args()
+
+    if args.cluster:
+        run_simulation()
+        return
+        
+    net, out, sim_params = run_simulation(exp_params)
+    print(out.result)
+    standard_plots(out)
+
+def run_simulation(exp_params=None, net=None):
+    task_id = 1
+    slurm_id = 1
+    if not exp_params:
+        print('getting exp_params')
+        exp_params, task_id, slurm_id = get_exp_params()
 
     value, repeat = exp_values_from_index(exp_params, task_id)
 
-    net = Network()
+    if not net:
+        net = Network()
     
     # Set network variable
     setattr(net, exp_params['variable'], value)
@@ -39,9 +153,12 @@ def run_simulation():
 
     #standard_plots(nout)
 
+    return net, out, sim_params
+
 def get_exp_params():
     """ Return the exp_params dict object and the task ID
     """
+    # TODO : Use argparser here and combine with run_experiment
     array_idx = 1
     slurm_id = 1
     exp_params = {
@@ -54,7 +171,7 @@ def get_exp_params():
         'running_ntasks':   1,
     }
 
-    assert len(sys.argv) < 4, "Too Many input arguments."
+    assert len(sys.argv) < 5, "Too Many input arguments."
 
     if len(sys.argv) > 1:
         exp_filename = sys.argv[1]
@@ -65,25 +182,6 @@ def get_exp_params():
         array_idx = int(sys.argv[2])
     
     return exp_params, array_idx, slurm_id
-
-def save_experiment(net, out, sim_params):
-    # spike_time_trace, vt, iapp, offsets, 
-    np.savez(f'{sim_params.output_folder}/{sim_params.output_base_filename}.npz', 
-                                    spike_time_trace=out.spike_time_trace,
-                                    vt=out.vt,
-                                    result=out.result,
-                                    iapp_trace=out.iapp_trace,
-                                    offsets=out.offsets)
-
-def load_experiment(filename):
-    npz = np.load(filename)
-    out = SimulationOuput()
-    out.spike_time_trace = npz['spike_time_trace']
-    out.vt = npz['vt']
-    out.result = npz['result']
-    out.iapp_trace = npz['iapp_trace']
-    out.offsets = npz['offsets']
-    return out
 
 
 def get_input(net, sim_params):
@@ -99,4 +197,4 @@ def get_input(net, sim_params):
     return inp.astype(int), ts.astype(int)
 
 if __name__ == '__main__':
-    main()
+    run_experiment()

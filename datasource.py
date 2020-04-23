@@ -1,10 +1,20 @@
 import numpy as np
-from simtools import MSPERSEC
+MSPERSEC = 1000
+
+
+# Might be useful one day
+# num_presentations = 10
+# idxs = np.tile([0, 1, 2], num_presentations)
+# ts = p_ts = np.reshape(np.tile(np.arange(0, num_presentations), (3, 1)), (-1), order='F') * 500 + np.tile([1, 2, 3], num_presentations)
+
+
+def test_case(N_inp):
+    return np.array([0, 1, 2, 0, 1, 2]), np.array([1, 3, 7, 501, 503, 507]), [0, 500]
 
 def random_data(N_inp, sim_time_sec):
     inp_idxs = np.random.randint(0, N_inp, (N_inp + 1) * 10 * sim_time_sec)
     inp_ts = np.random.randint(0, sim_time_sec * MSPERSEC, (N_inp + 1) * 10 * sim_time_sec)
-    return inp_idxs, inp_ts
+    return inp_idxs, inp_ts, []
 
 def embedded_pattern(Tp, Df, N_inp, Np, Pf, p_inp, p_ts, p_fun, dropout):
     exp_spikes_in_presentation = round(Np *( 1 - dropout))

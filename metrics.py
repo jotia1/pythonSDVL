@@ -2,7 +2,7 @@ from simtools import *
 import numpy as np
 
 def trueposxtrueneg(net, out, sim_params):
-    testing_seconds = net.test_seconds
+    testing_seconds = sim_params.test_seconds
     training_ms = (sim_params.sim_time_sec - testing_seconds) * MSPERSEC
 
     output_filter = np.logical_and(out.spike_time_trace[:, 1] == net.N-1, 
@@ -27,7 +27,7 @@ def trueposxtrueneg(net, out, sim_params):
         # Count previous gap as a true neg slot and whether it was a true neg
         if offset > end_last_offset:
             num_true_neg_slots += 1
-            if pre_offset_spikes:
+            if not pre_offset_spikes:
                 true_negatives += 1
         
         last_offset = offset
@@ -39,6 +39,8 @@ def trueposxtrueneg(net, out, sim_params):
         if offset_spikes:
             true_positives += 1
 
+    if len(test_offsets) == 0 or num_true_neg_slots == 0:
+        return 0
     prop_TP = true_positives / len(test_offsets)
     prop_TN = true_negatives / num_true_neg_slots
 

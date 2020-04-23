@@ -4,23 +4,26 @@ import math
 import numpy as np
 import sys
 from simtools import *
+import argparse
 
 # JOBNAME_SLURMID/JOBNAME_SLURMID_TASKID
 
 def run_slurm_array_job():
     exp_params = {
-        'variable'      :   'frq',
-        'var_min'       :   1,
-        'var_max'       :   3,
-        'var_step'      :   1,
-        'repeats'       :   3,
-        'job_name'      :   'frq_test',
-        'running_ntasks':   6,
-        'sim_time_sec'  :   11,
+        'variable'      :   'fgi',
+        'var_min'       :   0.0224,
+        'var_max'       :   0.0252,
+        'var_step'      :   0.0002,
+        'repeats'       :   10,
+        'job_name'      :   'lfgi',
+        'running_ntasks':   10,
+        'sim_time_sec'  :   300,
         'time_execution':   False,
         'Tp'            :   50,
         'Df'            :   10,
         'Pf'            :   5,
+        'naf'           :   500,
+        'test_seconds'  :   50,  
         'p_inp'         :   None,
         'p_ts'          :   None,
         'inp_idxs'      :   None,
@@ -29,7 +32,7 @@ def run_slurm_array_job():
         'data_fcn'      :   None,
         'voltages_to_save': [2000],
         'delays_to_save':   [],
-        'variances_to_save':[],    
+        'variances_to_save':[],  
     }
 
     tmp_exp_filename = 'tmp_exp_params.json'
@@ -42,10 +45,14 @@ def run_slurm_array_job():
     sbatch_params = {
         'job-name'  :   f'{job_name}',
         'array'     :   f'1-{ntasks}%{running_tasks_max}',
-        'time'      :   '01:00:00',
+        #'time'      :   '01:00:00',
+        #'nodelist' :   'r520-2',
+        #'mem'       :   '3G',
         'partition' :   'batch',
         'ntasks'    :   '1',
         'output'    :   f'{job_name}_%A_%a.out',
+        'mail-type' :   'end',
+        'mail-user' :   'joshua.arnold1@uqconnect.edu.au',
     }
 
     ## Build and write sbatch script
@@ -79,9 +86,9 @@ def generate_header(tmp_exp_filename, sbatch_params):
             '  sleep 5',
             '  counter=$(( $counter + 1 ))',
             'done',
-            'srun python3 runexperiment.py $EXP_PARAM_FILENAME $SLURM_ARRAY_TASK_ID',
+            'srun python3 runexperiment.py $EXP_PARAM_FILENAME $SLURM_ARRAY_TASK_ID -c',
             'if [[ $SLURM_ARRAY_TASK_ID -eq $SLURM_ARRAY_TASK_MAX ]]; then',
-            #f'  srun python3 runcluster.py {COMBINEFLAG} $EXP_PARAM_FILENAME $SLURM_ARRAY_JOB_ID',
+            #f'  srun python3 runcluster.py {COMBINEFLAG} -e $EXP_PARAM_FILENAME',
             '  mv $SLURM_JOB_NAME.sbatch $OUTPUT_DIR/',
             '  mv $EXP_PARAM_FILENAME $OUTPUT_DIR/',
             'fi',
@@ -100,13 +107,20 @@ def make_sbatch_header(sbatch_params):
 
     return '\n'.join(header)
 
+def calc_repeat_size(start, end, step_size):
+    return int(round((end - start) / step_size))
+
+def calc_steps(start, end, step_size, repeats):  
+    # TODO : change back to calc_ntasks, remove old calc ntaks and update references
+    return calc_repeat_size(start, end, step_size) * repeats
+
 def calc_ntasks(exp_params):
     start = exp_params.get('var_min')
     end = exp_params.get('var_max')
     step_size = exp_params.get('var_step')
     repeats = exp_params.get('repeats')
-
-    return int(round((end - start) / step_size) * repeats)
+    return calc_steps(start, end, step_size, repeats)
+    
 
 def write_exp_param_file(filename, exp_params):
     with open(filename, 'w') as fp:
@@ -147,14 +161,61 @@ def exp_values_from_index(exp_params, index):
     
 #     return np.array(results).reshape((-1, exp_params.get('repeats')))
 
+def combine(exp_params_filepath):
+    exp_params = load_exp_param_file(exp_params_filepath)
+    fp_split = exp_params_filepath.strip('.json').split('_')
+    slurmid = fp_split[-1]
 
-def main():
-    print("run cluster argv: ", sys.argv)
-    if len(sys.argv) == 4 and sys.argv[1] == COMBINEFLAG:
-        #print(combine_results(sys.argv[2], sys.argv[3]))
-        raise NotImplementedError()
-    else:
+    sim_params = SimulationParameters(exp_params, slurm_id=slurmid)
+    ntasks = calc_steps(sim_params.var_min, 
+                        sim_params.var_max, 
+                        sim_params.var_step, 
+                        sim_params.repeats)
+
+    result = []
+    for taskid in range(1, ntasks+1):
+        sim_params.task_id = taskid
+        filepath = sim_params.full_filepath + '.npz'
+        print('open file to combine: ', filepath)
+        out = load_experiment(filepath)
+        result.append(out.result)
+    
+    steps = calc_repeat_size(sim_params.var_min, sim_params.var_max, sim_params.var_step)
+    result_matrix = np.array(result).reshape((sim_params.repeats, -1))
+    combine_filename = f'{sim_params.output_folder}/combined.npz'
+    print('save combined as: ', combine_filename)
+    np.savez(combine_filename, result=result_matrix)
+
+
+def runcluster():
+    parser = argparse.ArgumentParser(description="Tools for running simulations on a slurm managed cluster.")
+    parser.add_argument('-c', COMBINEFLAG, help='Combine npz files at filepath', action="store_true")
+    parser.add_argument('-e', '--expparamsfp', help='The exp_params file', type=str)
+    parser.add_argument('-r', '--runslurm', help='Run a full slurm array job', action="store_true")
+    #parser.add_argument('-s', '--slurmid', help='Slurm ID of the simulation', type=str)
+    #parser.add_argument('-f', '--fstring', help='Formated string of filename', type=str)
+    #parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
+    args = parser.parse_args()
+    #if (args.combine != args.slurmid) or (args.combine != args.expparamsfile):  # Only one option provided
+    #    paser.error(f'{COMBINEFLAG} and --slurmid must both or neither be provided.')
+    
+    if args.combine:
+        print('--------- Combine triggered, combining!')
+        combine(args.expparamsfp)
+    
+    if args.runslurm:
+        print('----------   RUn slurm triggered, slurming')
         run_slurm_array_job()
 
+
+
+
+    # print("run cluster argv: ", sys.argv)
+    # if len(sys.argv) == 4 and sys.argv[1] == COMBINEFLAG:
+    #     #print(combine_results(sys.argv[2], sys.argv[3]))
+    #     raise NotImplementedError()
+    # else:
+    #     run_slurm_array_job()
+
 if __name__ == '__main__':
-    main()
+    runcluster()

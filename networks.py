@@ -27,8 +27,6 @@ class Network(object):
         self.variance_max = 10
         self.delay_max = 20
 
-        self.test_seconds = 2
-
         self.a1 = 3
         self.a2 = 20
         self.b1 = 20
