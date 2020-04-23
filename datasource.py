@@ -34,7 +34,7 @@ def embedded_pattern(Tp, Df, N_inp, Np, Pf, p_inp, p_ts, p_fun, dropout):
 
     # Generate base spike trains
     toppoiss = np.random.poisson(N_dist_npt_freq * N_dist)
-    top_inp = np.random.randint(Np, N_inp + 1, (1, toppoiss))
+    top_inp = np.random.randint(Np, N_inp, (1, toppoiss))
     top_ts = np.random.randint(0, MSPERSEC, (1, toppoiss))
 
     bottpoiss = np.random.poisson(Np * bottom_base_freq)
@@ -64,7 +64,7 @@ def embedded_pattern(Tp, Df, N_inp, Np, Pf, p_inp, p_ts, p_fun, dropout):
 
         # Generate distractor spikes simultaneous to pattern
         offsetpoiss = np.random.poisson(exp_N_dist_spikes_Tp)
-        offset_inp = np.random.randint(Np, N_inp + 1, (offsetpoiss))
+        offset_inp = np.random.randint(Np, N_inp, (offsetpoiss))
         offset_ts = np.random.randint(0, Tp + 1, (offsetpoiss))
 
         patt_toinsert = p_inp
