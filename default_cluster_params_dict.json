@@ -1,0 +1,10 @@
+{
+    "job_name": "default",
+    "repeats": 3,
+    "running_ntasks": 10,
+    "sim_params_dict": null,
+    "var_max": 0.0224,
+    "var_min": 0.02,
+    "var_step": 0.0002,
+    "variable": "fgi"
+}

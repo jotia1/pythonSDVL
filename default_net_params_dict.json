@@ -1,0 +1,27 @@
+{
+    "N": 2001,
+    "N_inp": 2000,
+    "a1": 3,
+    "a2": 20,
+    "b1": 20,
+    "b2": 20,
+    "connections": null,
+    "delay_init": 5,
+    "delay_max": 20,
+    "fgi": 0.0226,
+    "group_sizes": [
+        2000,
+        1
+    ],
+    "neuron_tau": 20,
+    "nu": 0.04,
+    "nv": 0.04,
+    "v_reset": -70,
+    "v_rest": -65,
+    "v_threshold": -55,
+    "variance_init": 2,
+    "variance_max": 10,
+    "variance_min": 0.1,
+    "w_init": 1,
+    "w_max": 10
+}

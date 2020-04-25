@@ -12,6 +12,11 @@ COMBINEFLAG='--combine'
 STANDARDINPUT='STANDARDINPUT'
 TESTINPUT='TESTINPUT'
 
+# Defaults filenames
+DEFAULT_NET_PARAMS_DICT_FILENAME = 'default_net_params_dict.json'
+DEFAULT_SIM_PARAMS_DICT_FILENAME = 'default_sim_params_dict.json'
+DEFAULT_CLUSTER_PARAMS_DICT_FILENAME = 'default_cluster_params_dict.json'
+
 ALLSIMPARAMS = {
     'sim_time_sec',
     'time_execution',

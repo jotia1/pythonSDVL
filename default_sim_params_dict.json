@@ -1,0 +1,21 @@
+{
+    "Df": 10,
+    "Pf": 5,
+    "Tp": 50,
+    "data_fcn": null,
+    "delays_to_save": [],
+    "inp_idxs": null,
+    "inp_ts": null,
+    "inp_type": "STANDARDINPUT",
+    "naf": 500,
+    "net_params_dict": null,
+    "p_inp": null,
+    "p_ts": null,
+    "sim_time_sec": 300,
+    "test_seconds": 50,
+    "time_execution": true,
+    "output_folder": ".",
+    "output_base_filename": "local",
+    "variances_to_save": [],
+    "voltages_to_save": [2000]
+}
