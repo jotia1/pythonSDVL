@@ -3,8 +3,8 @@ from abc import ABC, abstractmethod
 
 class Network(object):
 
-    def __init__(self, net_params):
-        if not self.valid_params(net_params):
+    def __init__(self, net_params_dict):
+        if not self.valid_params(net_params_dict):
             raise Exception("Network Parameters not valid")
 
         self.group_sizes = None
@@ -38,7 +38,7 @@ class Network(object):
         self.nu = None
         self.nv = None
         
-        for key, value in net_params.items():
+        for key, value in net_params_dict.items():
             setattr(self, key, value)
 
         # Set up connectivity
