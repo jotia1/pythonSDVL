@@ -39,6 +39,15 @@ ALLSIMPARAMS = {
     'output_base_filename',
 }
 
+ALLOUTPARAMS = {
+    'sim_timer',
+    'vt',
+    'variancest',
+    'delayst',
+    'iapp_trace',
+    'spike_time_trace',
+}
+
 class SimulationTimer():
 
     def __init__(self, time_execution=False):
@@ -145,18 +154,9 @@ class OldSimulationParameters():
         return True # TODO : Verify required params exist
 
 
-class SimulationOuput():
-    def __init__(self):
-        self.sim_timer = None
-        self.vt = None
-        self.variancest=None
-        self.delayst=None
-        self.iapp_trace = None
-        self.spike_time_trace = None
-
-class ParametersObject():
+class DataObject():
     _all_params = set()
-    def __init__(self, from_dict):
+    def __init__(self, from_dict=None):
         self.from_dict = from_dict
         if from_dict:
             self.load_from_dict(from_dict)
@@ -192,9 +192,21 @@ class ParametersObject():
         return from_dict != None and self.missing_params(from_dict) == []
 
 
-class SimulationParameters(ParametersObject):
+class SimulationOuput(DataObject):
+    _all_params = ALLOUTPARAMS
+    def __init__(self, from_dict=None):
+        self.sim_timer = None
+        self.vt = None
+        self.variancest=None
+        self.delayst=None
+        self.iapp_trace = None
+        self.spike_time_trace = None
+
+        super().__init__(from_dict)
+
+class SimulationParameters(DataObject):
     _all_params = ALLSIMPARAMS
-    def __init__(self, from_dict):
+    def __init__(self, from_dict=None):
         # For the sake of linting...
         self.sim_time_sec = None
         self.time_execution  = None
@@ -253,7 +265,7 @@ class SimulationParameters(ParametersObject):
         return sim_params_dict
         
 
-class NetworkParameters(ParametersObject):
+class NetworkParameters(DataObject):
     _all_params = set()  # TODO if we use this class
     def __init__(self, from_dict):
         self.group_sizes = None
@@ -305,10 +317,14 @@ def load_sim_params(filename):
     return SimulationParameters(sim_params_dict)
 
 
-def save_experiment(net, out, sim_params, only_output=True):
-    # spike_time_trace, vt, iapp, offsets, 
+def save_experiment(net, out, sim_params, remove_input=True):
+    # spike_time_trace, vt, iapp, offsets,
+    stt = out.spike_time_trace
+    if remove_input:
+        stt = out.spike_time_trace[out.spike_time_trace[:, 1] == net.N-1, :]
+
     np.savez(f'{sim_params.output_folder}/{sim_params.output_base_filename}.npz', 
-                                    spike_time_trace=out.spike_time_trace[out.spike_time_trace[:, 1] == net.N-1, :] if only_output else out.spike_time_trace,
+                                    spike_time_trace=stt,
                                     vt=out.vt,
                                     result=out.result,
                                     iapp_trace=out.iapp_trace,
